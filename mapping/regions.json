@@ -1,4 +1,5 @@
 {
     "canada": ["bhs"],
-    "europe": ["gra", "rbx", "sbg", "par"]
+    "europe": ["gra", "rbx", "sbg", "par"],
+    "all": ["gra", "rbx", "sbg", "par", "bhs"]
 }
