@@ -123,6 +123,9 @@ class Crawler(object):
             _logger.error("No answer from API: %s", response_json)
             return
         availability = response_json['answer']['availability']
+        if 'debug_availability' in _CONFIG:
+	    with open( _CONFIG['debug_availability'], 'w') as outfile:
+                json.dump(availability, outfile)
         for item in availability:
             # get server type of availability item
             server_type = self.SERVER_TYPES.get(item['reference'])
@@ -176,6 +179,7 @@ if __name__ == "__main__":
         'pushbullet': 'notifiers.pushbullet_notifier.PushbulletNotifier',
         'file': 'notifiers.file_notifier.FileNotifier',
         'freemobile': 'notifiers.freemobile_notifier.FreemobileNotifier',
+        'twilio': 'notifiers.twilio_notifier.TwilioNotifier',
     }
     # Select notifier, 'email' by default
     if 'notifier' not in _CONFIG:

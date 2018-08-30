@@ -39,6 +39,7 @@ Set it up
     - `"pushover"`: send Pushover message, requires account - needs chump
     - `"pushbullet"`: send Pushbullet message, requires account - needs pushbullet
     - `"freemobile"`: sends sms to freemobile customer, requires account - needs requests
+    - `"twilio"`: sends sms using twilio, requires account - needs twilio api (pip install twilio)
 
   - `to_email`: your email to receive notifications
   - `from_email`: email account of the crawler.
@@ -48,6 +49,10 @@ Set it up
   - `pushbullet_apikey`: your Pushbullet API key, notification sent to all devices.
   - `freemobile_username`: your freemobile login
   - `freemobile_key`: your freemobile sms notification key
+  - `twilio_account_sid`: You get this from your twilio dashboard
+  - `twilio_auth_token`: your freemobile sms notification key
+  - `twilio_recipient`: phone number to send the notification to
+  - `twilio_sender`: phone number to send the notification from, must be linked to the twilio account
 
 - Crawler runs on Python 2.7+ and Tornado framework 4.0+. Assuming that you already have Python/pip, just get Tornado and the notifier dependencies with `sudo pip install -r requirements.txt`. You can also set up virtualenv if you like.
 - Run with `python crawler.py`. If no error messages come, you're ready.
@@ -77,6 +82,7 @@ You can add more options to the config.json if you need:
 - `"use_starttls": true` // forcing encrypted SMTP session using TLS (true by default)
 - `"use_ssl": false` // forcing encrypted SMTP session using SSL (false by default)
 - `"from_user": "sender@domain.com"`  // if smtp user is different from `from_email`
+- "debug_availability": "./availability.json" // Write availability (downloaded from Kimsufi) into a JSON file. Helps when models change.
 
 **Versions**
 
