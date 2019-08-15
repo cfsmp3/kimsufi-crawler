@@ -17,7 +17,7 @@ class PushbulletNotifier(Notifier):
 
     def check_requirements(self):
         try:
-            pb = Pushbullet(self.pushbullet_apikey)
+            Pushbullet(self.pushbullet_apikey)
         except Exception as ex:
             _logger.error("Cannot connect to your Pushbullet account. "
                           "Correct your config and try again. Error details:")
@@ -27,4 +27,4 @@ class PushbulletNotifier(Notifier):
 
     def notify(self, title, text, url=None):
         pb = Pushbullet(self.pushbullet_apikey)
-        push = pb.push_link(text, url)
+        _ = pb.push_link(text, url)

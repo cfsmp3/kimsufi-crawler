@@ -68,6 +68,6 @@ class EmailNotifier(Notifier):
             server.starttls()
             server.ehlo()
         if self.login_required:
-          server.login(self.fromuser, self.frompwd)
+            server.login(self.fromuser, self.frompwd)
         text = msg.as_string()
         server.sendmail(self.fromaddr, self.toaddr, text)

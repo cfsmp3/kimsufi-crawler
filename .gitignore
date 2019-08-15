@@ -59,3 +59,6 @@ docs/_build/
 
 # Private files
 config.json
+
+# Debug file
+availability.json
