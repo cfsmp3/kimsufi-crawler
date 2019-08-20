@@ -11,6 +11,7 @@ import logging
 import importlib
 import tornado.ioloop
 import tornado.web
+import argparse
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpclient import HTTPError
 from tornado.gen import coroutine
@@ -88,7 +89,7 @@ class Crawler(object):
                 "State change - %s: %s", state, value
             )
         # notify, if state changed from False to True
-        if value and not self.STATES[state]:
+        if self.state_change_callback and value and not self.STATES[state]:
             self.state_change_callback(state, message)
         # save the new value
         self.STATES[state] = value
@@ -138,7 +139,15 @@ class Crawler(object):
         response_json = json.loads(
             resp.body.decode("utf-8")
         )
-        if False and response_json.get("error"):
+        self.process_json(response_json)
+
+    def process_json(self, response_json):
+        if not response_json:
+            _logger.error(
+                "No answer from API: %s", response_json
+            )
+            return
+        if "error" in response_json and response_json.get("error"):
             if response_json["error"]["status"] == 451:
                 match = re.search(
                     r"will be replenished in (\d+) seconds.",
@@ -163,22 +172,20 @@ class Crawler(object):
                     self.interval,
                 )
                 return
-        if not response_json:
-            _logger.error(
-                "No answer from API: %s", response_json
-            )
-            return
         availability = (
             response_json
         )  # No longer a separate node
+
         if "debug_availability" in _CONFIG:
             with open(
                 _CONFIG["debug_availability"], "w"
             ) as outfile:
                 json.dump(availability, outfile)
+
         for item in availability:
             # get server type of availability item
             item_hw = item["hardware"]
+
             if item_hw in self.ignored_hardware:
                 continue
             server_type = self.SERVER_TYPES.get(item_hw)
@@ -189,25 +196,27 @@ class Crawler(object):
                 )
                 self.ignored_hardware.add(item_hw)
                 continue
-            # make a flat list of zones where servers of this type are available
-            available_zones = set(
+
+            # make a flat list of zones where servers of this type are
+            # available
+            available_datacenters = set(
                 [
-                    item["region"]
+                    e["datacenter"]
                     for e in item["datacenters"]
                     if e["availability"]
                     not in ["unavailable", "unknown"]
                 ]
             )
             _logger.debug(
-                "%s (%s) is available in %s",
+                "%s (%s) is available in %s (%s)",
                 server_type,
                 item_hw,
-                available_zones,
+                available_datacenters, item["region"]
             )
             # iterate over all regions and update availability states
             for region, places in self.REGIONS.items():
                 server_available = bool(
-                    available_zones.intersection(places)
+                    available_datacenters.intersection(places)
                 )
                 state_id = "%s_available_in_%s" % (
                     server_type.lower(),
@@ -245,6 +254,12 @@ if __name__ == "__main__":
     _CONFIG = parse_json_file(
         os.path.join(CURRENT_PATH, "config.json")
     )
+
+    parser = argparse.ArgumentParser(description='Kimsufi stock watcher.')
+    parser.add_argument('--readjson',
+                        help='read a json, process it, and exit (useful for debugging)',
+                        default=None, required=False)
+    args = parser.parse_args()
 
     # init notifier
     _NOTIFIERS = {
@@ -307,6 +322,19 @@ if __name__ == "__main__":
 
     # Init the crawler
     crawler = Crawler(state_change_callback=state_changed)
+
+    if args.readjson:
+        try:
+            with open(args.readjson) as json_file:
+                data = json.load(json_file)
+                del (_CONFIG["debug_availability"])
+                crawler.process_json(data)
+                sys.exit(0)
+        except Exception as ex:
+            _logger.error("Exception reading json")
+            _logger.error(ex)
+            sys.exit(1)
+
     crawler.periodic_cb = tornado.ioloop.PeriodicCallback(
         crawler.run, crawler.interval * 1000
     )

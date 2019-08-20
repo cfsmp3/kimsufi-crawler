@@ -38,4 +38,3 @@ class PushoverNotifier(Notifier):
                                     title=title,
                                     url=url)
 
-
