@@ -12,6 +12,7 @@ import importlib
 import tornado.ioloop
 import tornado.web
 import argparse
+from collections import defaultdict
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpclient import HTTPError
 from tornado.gen import coroutine
@@ -57,11 +58,6 @@ class Crawler(object):
         self.SERVER_TYPES = parse_json_file(
             os.path.join(
                 CURRENT_PATH, "mapping/server_types.json"
-            )
-        )
-        self.REGIONS = parse_json_file(
-            os.path.join(
-                CURRENT_PATH, "mapping/regions.json"
             )
         )
 
@@ -182,6 +178,7 @@ class Crawler(object):
             ) as outfile:
                 json.dump(availability, outfile)
 
+        items_places = defaultdict (dict)
         for item in availability:
             # get server type of availability item
             item_hw = item["hardware"]
@@ -197,8 +194,15 @@ class Crawler(object):
                 self.ignored_hardware.add(item_hw)
                 continue
 
-            # make a flat list of zones where servers of this type are
-            # available
+            if server_type not in _CONFIG["servers"]:
+                _logger.debug(
+                    "%s not in wanted list, ignored.", item_hw
+                )
+                self.ignored_hardware.add(item_hw)
+                continue
+
+            # List of datacenters in this specific region in which
+            # the server is available
             available_datacenters = set(
                 [
                     e["datacenter"]
@@ -213,30 +217,50 @@ class Crawler(object):
                 item_hw,
                 available_datacenters, item["region"]
             )
+            if len (available_datacenters) > 0:
+                items_places[item_hw][item["region"]] = available_datacenters
+
+        for item_hw in items_places:
+            server_type = self.SERVER_TYPES.get(item_hw)
+            all_locations = [ items_places[item_hw][y] for y in [x for x in items_places[item_hw] ] ]
+            all_locations_list = list(set.union(*map(set, all_locations)))
+            if "default" in all_locations_list:
+                all_locations_list.remove ("default")
+            _logger.debug ("All_locations:" +item_hw +" " + str (all_locations_list))
+            item_regions = [x for x in items_places[item_hw] ]
+            if len (item_regions) > 0:
+                item_regions.append (u"any")
+            _logger.debug ("Regions:" +item_hw +" " + str (item_regions))
+
             # iterate over all regions and update availability states
-            for region, places in self.REGIONS.items():
-                server_available = bool(
-                    available_datacenters.intersection(places)
-                )
+            for wanted_region in _CONFIG["regions"]:
+                server_available = wanted_region in item_regions
+
+		_logger.debug ("Server available in %s: %s ",
+                    wanted_region, str (server_available))
                 state_id = "%s_available_in_%s" % (
                     server_type.lower(),
-                    region.lower(),
+                    wanted_region.lower(),
                 )
                 message = {
                     "title": "{0} is available".format(
                         server_type
                     ),
-                    "text": "Server {server} is available in {region}".format(
+                    "text": "Server {server} is available in {region} ({datacenters})".format(
                         server=server_type,
                         region=region.capitalize(),
+                        datacenters=','.join (all_locations_list)
                     ),
                     "url": "http://www.kimsufi.com/en/index.xml",
                 }
+                if server_available:
+                    _logger.debug (message)
                 # if 'sys' in item['reference'] or 'bk' in item['reference']:
                 #    message['url'] = 'http://www.soyoustart.com/de/essential-server/'
                 self.update_state(
                     state_id, server_available, message
                 )
+        #_logger.debug ("Dict of everything: " + str (dict (items_places)))
 
 
 def bell():
@@ -259,6 +283,9 @@ if __name__ == "__main__":
     parser.add_argument('--readjson',
                         help='read a json, process it, and exit (useful for debugging)',
                         default=None, required=False)
+    parser.add_argument('--dryrun',
+                        help='Do everything except send notifications.',
+                        action='store_true', required=False)
     args = parser.parse_args()
 
     # init notifier
@@ -302,10 +329,11 @@ if __name__ == "__main__":
     # prepare states tracked by the user
     TRACKED_STATES = []
     for server in _CONFIG["servers"]:
-        TRACKED_STATES.append(
-            "%s_available_in_%s"
-            % (server.lower(), _CONFIG["region"].lower())
-        )
+        for region in _CONFIG["regions"]:
+            TRACKED_STATES.append(
+                "%s_available_in_%s"
+                % (server.lower(), region.lower())
+            )
     _logger.info("Tracking states: %s", TRACKED_STATES)
 
     # define state-change callback to notify the user
@@ -313,9 +341,12 @@ if __name__ == "__main__":
         """Trigger notifications"""
         message = message or {}
         if state in TRACKED_STATES:
-            _logger.info("Will notify: %s", state)
-            NOTIFIER.notify(**message)
-            bell()
+            if args.dryrun:
+                _logger.info("dryrun: %s", state)
+            else:
+                _logger.info("Will notify: %s", state)
+                NOTIFIER.notify(**message)
+                bell()
 
     # Check and set request timeout
     REQUEST_TIMEOUT = _CONFIG.get("request_timeout", 30)
